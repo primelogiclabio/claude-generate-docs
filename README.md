@@ -81,13 +81,13 @@ One line installs it, in either of two places:
 Both add the `claude-tools` marketplace first if you haven't added it yet.
 
 The step-by-step instructions for both paths are in the
-[repo README](../../README.md#installing). Notes specific to this skill:
+[repo README](https://github.com/primelogiclabio/claude-tools#installing). Notes specific to this skill:
 
 - **As a plain skill, without the plugin wrapper.** Link the folder into your
-  skills directory. Put your clone's path in place of `C:\src\claude-tools`:
+  skills directory. Put your clone's path in place of `C:\src\claude-generate-docs`:
 
   ```powershell
-  New-Item -ItemType Junction -Path "$HOME\.claude\skills\generate-docs" -Target "C:\src\claude-tools\plugins\generate-docs"
+  New-Item -ItemType Junction -Path "$HOME\.claude\skills\generate-docs" -Target "C:\src\claude-generate-docs"
   ```
 
   Remove the link only with `cmd /c rmdir "$HOME\.claude\skills\generate-docs"`.
