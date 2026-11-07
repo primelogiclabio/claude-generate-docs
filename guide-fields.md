@@ -4,13 +4,30 @@ Read this when a doc gets fill-in fields (see "Guides and fill-in fields" in [SK
 
 ## Markup
 
-The remember/reset control goes once, in the header:
+The values bar goes once, in the header: the remember/reset control plus three ways to share the filled-in result.
 
 ```html
 <div class="values-bar">
   <label><input type="checkbox" id="values-remember" checked> Remember my values on this device</label>
   <button type="button" id="values-reset">Reset values</button>
+  <button type="button" id="values-pdf">Save as PDF</button>
+  <button type="button" id="values-download">Download filled copy</button>
+  <button type="button" id="values-copy">Copy values</button>
 </div>
+```
+
+- **Save as PDF** opens the browser's print dialog (choose "Save as PDF" as the printer). The print shows the reader's values in every command, only the variants they chose, and a table of their values; inputs, nav and buttons are hidden.
+- **Download filled copy** saves a new `.html` file (`<name>-filled.html`) with the values built in as the fields' defaults. Whoever opens it sees the values, can still edit them, and Reset returns to them. It keeps its own storage, so it never mixes with the original's saved values.
+- **Copy values** copies a plain-text list (`Label: value`, one per line, under the doc's title) for pasting into a ticket, chat or email. Each code and output block keeps its own Copy button for pasting commands.
+
+A print-only table of the values goes right after the header, one row per field, with a token in each value cell (a choice field's token shows the chosen option's text, and its row has class `choice`):
+
+```html
+<table class="print-only values-table">
+  <caption>Values used in this copy</caption>
+  <tr><th scope="row">Valkey version</th><td><span class="fv" data-field="valkey-version"></span></td></tr>
+  <tr class="choice"><th scope="row">Your system</th><td><span class="fv" data-field="os"></span></td></tr>
+</table>
 ```
 
 A text field goes inline, in the step where its value is first needed. `data-field` is the value's name; it's also what an empty token shows (`<valkey-version>`) and what the Markdown file uses as the placeholder. The hint is shown only when the entry doesn't match `pattern`.
@@ -42,11 +59,11 @@ Every later use of a value is a token, in prose or inside code:
 <pre><code>docker run -d --name valkey -p <span class="fv" data-field="valkey-port"></span>:6379 valkey/valkey:<span class="fv" data-field="valkey-version"></span></code></pre>
 ```
 
-A block that only applies to some choices gets `data-when="field=value"` (several values: `data-when="os=unix,wsl"`). Put it on a block element: a `<pre>`, `<p>`, `<div>` or `<li>`.
+A block that only applies to some choices gets `data-when="field=value"` (several values: `data-when="os=unix,wsl"`) and a `data-label` naming the variant. Put it on a block element: a `<pre>`, `<p>`, `<div>` or `<li>`. On screen only the chosen variant shows; a blank print (nothing filled in, such as the PDF the skill generates) shows every variant under its label.
 
 ```html
-<pre data-when="os=windows"><code>...PowerShell version...</code></pre>
-<pre data-when="os=unix"><code>...bash version...</code></pre>
+<pre data-when="os=windows" data-label="Windows (PowerShell)"><code>...PowerShell version...</code></pre>
+<pre data-when="os=unix" data-label="Linux or macOS (bash)"><code>...bash version...</code></pre>
 ```
 
 An output block assembles values into paste-ready text:
@@ -85,15 +102,35 @@ Uses `--warn` and `--warn-soft` for missing or malformed values and `--accent-so
 @media (max-width:640px){ .code pre{padding-right:16px; padding-top:44px} } /* phones: the button sits above the first line instead of covering it */
 .output{margin:16px 0 20px}
 .output figcaption{margin:0 0 6px; font-weight:650; color:var(--fg)}
+.values-table caption{text-align:left; font-weight:650; margin:0 0 6px}
+@media screen{ .print-only{display:none !important} }
+@media print{
+  .values-bar, .field, .copy-btn{display:none !important}
+  .code pre{padding:12px 16px}
+  .fv{background:none; padding:0; color:inherit}
+  html:not(.filled) .values-table tr.choice{display:none} /* a blank print shows every variant, so no choice to report */
+  .fv.empty{color:inherit; font-style:italic}
+  /* blank print (nothing filled in): every variant, each under its label */
+  html:not(.filled) [data-when]{display:block !important}
+  html:not(.filled) li[data-when]{display:list-item !important}
+  html:not(.filled) [data-when][data-label]::before{content:attr(data-label); display:block; margin:0 0 4px; font-weight:650; font-size:.85rem}
+}
 ```
+
+This goes alongside the page's general `@media print` block from SKILL.md (which hides the nav and theme button).
 
 ## JS
 
-Set `STORE` to a key unique to the doc (its file name works), so two guides opened from the same folder don't share values.
+Values are saved in the browser's `localStorage`, never written into the HTML file: they stay on that browser on that device, and someone you send the file to sees empty fields (that's what **Download filled copy** is for). Set `NAME` to the doc's file name without extension: it's the storage key and the downloaded copy's name. Chrome and Edge give every `file://` page the same storage, so without a unique key two guides would share values.
+
+**Make this the first `<script>` in `<body>`**, before the nav and theme-button code: its first line captures the page's untouched HTML for **Download filled copy**, and that has to happen before any script changes the page.
 
 ```js
 (function () {
-  var STORE = 'valkey-postgres-guide';
+  var SOURCE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML; // first, before anything changes the page
+  var NAME = 'valkey-postgres-guide';
+  var filledStamp = document.documentElement.getAttribute('data-filled'); // set in downloaded filled copies
+  var STORE = NAME + (filledStamp ? '-filled-' + filledStamp : '');      // each filled copy keeps its own storage
   var fields = {}, touched = {};
   document.querySelectorAll('input[data-field], select[data-field]').forEach(function (el) { fields[el.getAttribute('data-field')] = el; });
   var remember = document.getElementById('values-remember');
@@ -104,17 +141,23 @@ Set `STORE` to a key unique to the doc (its file name works), so two guides open
     try { if (val === null) localStorage.removeItem(STORE + '-' + key); else localStorage.setItem(STORE + '-' + key, val); } catch (e) {}
   }
   function value(name) { return fields[name] ? fields[name].value.trim() : ''; }
+  function shown(name) { // what a token displays: a choice field shows its option's text
+    var el = fields[name];
+    return el && el.tagName === 'SELECT' ? el.options[el.selectedIndex].text : value(name);
+  }
   function valid(name) { return !fields[name] || !fields[name].validity.patternMismatch; }
   function label(name) {
     var l = fields[name] && document.querySelector('label[for="' + fields[name].id + '"]');
     return l ? l.textContent.trim() : name;
   }
 
-  // wrap every code block with a Copy button; a data-when on the <pre> moves to the wrapper so the button hides with it
+  // wrap every code block with a Copy button; data-when/data-label on the <pre> move to the wrapper so the button hides with it
   document.querySelectorAll('main pre').forEach(function (pre) {
     var wrap = document.createElement('div');
     wrap.className = 'code';
-    if (pre.hasAttribute('data-when')) { wrap.setAttribute('data-when', pre.getAttribute('data-when')); pre.removeAttribute('data-when'); }
+    ['data-when', 'data-label'].forEach(function (a) {
+      if (pre.hasAttribute(a)) { wrap.setAttribute(a, pre.getAttribute(a)); pre.removeAttribute(a); }
+    });
     pre.parentNode.insertBefore(wrap, pre);
     wrap.appendChild(pre);
     var btn = document.createElement('button');
@@ -133,7 +176,7 @@ Set `STORE` to a key unique to the doc (its file name works), so two guides open
   function render() {
     document.querySelectorAll('.fv').forEach(function (t) {
       var name = t.getAttribute('data-field'), v = value(name);
-      t.textContent = v || '<' + name + '>';
+      t.textContent = v ? shown(name) : '<' + name + '>';
       t.classList.toggle('empty', !v);
       t.classList.toggle('invalid', !!v && !valid(name));
     });
@@ -164,9 +207,33 @@ Set `STORE` to a key unique to the doc (its file name works), so two guides open
     setTimeout(function () { box.classList.remove('attention'); }, 1600);
   }
   function flash(btn, text) {
+    if (!btn.restLabel) btn.restLabel = btn.textContent;
     btn.textContent = text;
     clearTimeout(btn.flashTimer);
-    btn.flashTimer = setTimeout(function () { btn.textContent = 'Copy'; }, 2200);
+    btn.flashTimer = setTimeout(function () { btn.textContent = btn.restLabel; }, 2200);
+  }
+  function valuesText() {
+    return [document.title].concat(Object.keys(fields).map(function (name) {
+      return label(name) + ': ' + (value(name) ? shown(name) : '(not filled in)');
+    })).join('\n');
+  }
+  function downloadFilled() {
+    // the untouched page, with the current values written in as the fields' defaults
+    var doc = new DOMParser().parseFromString(SOURCE, 'text/html');
+    Object.keys(fields).forEach(function (name) {
+      var el = doc.getElementById(fields[name].id);
+      if (el.tagName === 'SELECT') Array.prototype.forEach.call(el.options, function (o) { o.toggleAttribute('selected', o.value === fields[name].value); });
+      else el.setAttribute('value', fields[name].value);
+    });
+    doc.documentElement.removeAttribute('data-theme');
+    doc.documentElement.setAttribute('data-filled', String(Date.now()));
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['<!DOCTYPE html>\n' + doc.documentElement.outerHTML], { type: 'text/html' }));
+    a.download = NAME + '-filled.html';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
   }
   function copyText(text) {
     if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
@@ -198,19 +265,36 @@ Set `STORE` to a key unique to the doc (its file name works), so two guides open
     if (remember.checked) save(); else store('values', null);
   });
   reset.addEventListener('click', function () {
+    // back to the page's defaults: empty in the original, the built-in values in a filled copy
     Object.keys(fields).forEach(function (name) {
       var el = fields[name];
       if (el.tagName === 'SELECT') {
         var def = Array.prototype.filter.call(el.options, function (o) { return o.defaultSelected; })[0] || el.options[0];
         el.value = def.value;
       } else {
-        el.value = '';
+        el.value = el.defaultValue;
       }
     });
     touched = {};
     store('values', null);
     render();
   });
+
+  var printFilled = false;
+  document.getElementById('values-pdf').addEventListener('click', function () { printFilled = true; window.print(); });
+  // a print with values shows only the chosen variants; a blank one (Ctrl+P on an empty guide, headless PDF) shows them all
+  window.addEventListener('beforeprint', function () {
+    var any = Object.keys(fields).some(function (n) { return fields[n].tagName !== 'SELECT' && value(n); });
+    document.documentElement.classList.toggle('filled', printFilled || any);
+    printFilled = false;
+  });
+  document.getElementById('values-download').addEventListener('click', downloadFilled);
+  var copyBtn = document.getElementById('values-copy');
+  copyBtn.addEventListener('click', function () {
+    copyText(valuesText()).then(function () { flash(copyBtn, 'Copied'); }, function () { flash(copyBtn, 'Copy failed'); });
+  });
+
+  Object.keys(fields).forEach(function (name) { if (value(name)) touched[name] = true; }); // built-in values in a filled copy
 
   remember.checked = load('remember') !== 'off';
   if (remember.checked) {
@@ -232,5 +316,6 @@ Set `STORE` to a key unique to the doc (its file name works), so two guides open
 - **One input per value.** Two inputs with the same `data-field` would fight; later uses are always tokens.
 - **Don't put a field inside a `data-when` block** unless the value is only used in that variant; otherwise clicking a token can't reach a hidden field.
 - **`pattern` matches the whole entry** (the browser anchors it) and modern browsers compile it with the `v` flag, so escape `-` inside a character class (`[A-Z0-9\-]`). Check each pattern against its own placeholder example.
+- **The filled copy never contains secrets**, because fields never hold them (see SKILL.md). It does contain everything else the reader typed, such as host names, as does the PDF.
 - **`autocomplete="off"`** on every field stops the browser restoring values on reload by itself, which would defeat the remember switch.
 - **The script needs `main` to wrap the doc body** (as the page layout already does) so the copy buttons stay off the nav and header.

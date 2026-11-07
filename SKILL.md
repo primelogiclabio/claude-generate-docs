@@ -1,15 +1,27 @@
 ---
 name: generate-docs
-description: Generate project documentation or research documentation as a self-contained HTML file (light/dark toggle, jump-to-section nav menu, no external network calls) plus a matching plain Markdown file. Use this whenever the user asks to document, write up, explain, or create project documentation, research documentation, an overview/comparison/decision doc for a technical topic, system, or architecture choice, or a step-by-step guide (how-to, setup or install steps, runbook, with fill-in fields for values the reader supplies) — even if they just say "write this up," "document this," or "create an overview of X" without naming a format. Especially relevant for cross-project research, architecture explainers, build-vs-buy comparisons, and anything meant to be read later by the user or a colleague rather than just answered in chat.
+description: Generate project documentation or research documentation as a self-contained HTML file (system/light/dark theme, jump-to-section nav menu, no external network calls), a plain Markdown file, a PDF, or any mix of the three — HTML + Markdown by default. Use this whenever the user asks to document, write up, explain, or create project documentation, research documentation, an overview/comparison/decision doc for a technical topic, system, or architecture choice, or a step-by-step guide (how-to, setup or install steps, runbook, with fill-in fields for values the reader supplies) — even if they just say "write this up," "document this," or "create an overview of X" without naming a format. Especially relevant for cross-project research, architecture explainers, build-vs-buy comparisons, and anything meant to be read later by the user or a colleague rather than just answered in chat.
 ---
 
 # Generate docs
 
-Produces a two-file deliverable for a technical topic: one self-contained `.html` file people can just double-click open, and one `.md` file with the same content in plain Markdown (for pasting into a wiki, diffing in git, or reading in a terminal). Both come from the same source material — write the content once, then render it twice.
+Produces a doc for a technical topic in up to three formats, all from the same source material — write the content once, then render it once per format:
 
-## Why this shape
+- **HTML** — one self-contained `.html` file people can just double-click open.
+- **Markdown** — the same content in a plain `.md` file (for pasting into a wiki, diffing in git, or reading in a terminal).
+- **PDF** — a print of the HTML, for attaching, emailing or printing.
 
-The HTML version is the one people actually read: it's visual, it has a working light/dark toggle, and a jump-to-section menu so a 10-section doc doesn't turn into endless scrolling. The Markdown version exists because not every place a doc ends up (a git repo, a work wiki, a Slack paste) wants to run arbitrary HTML — Markdown travels better there. Neither replaces the other; ship both every time.
+## Pick the formats first
+
+Before writing anything, settle which formats to produce:
+
+- **If the request already says** ("just the HTML", "markdown only", "and a PDF"), use that and don't ask.
+- **Otherwise ask once**, as a multi-select question with HTML, Markdown and PDF as the choices and HTML + Markdown preselected / marked recommended. Any non-empty combination is valid (HTML only, Markdown only, HTML + PDF, all three…).
+- **If you can't ask** (a non-interactive or scheduled run), produce HTML + Markdown.
+
+## Why these shapes
+
+The HTML version is the one people actually read: it's visual, it follows the reader's system light/dark setting (with a toggle to override it), and it has a jump-to-section menu so a 10-section doc doesn't turn into endless scrolling. The Markdown version exists because not every place a doc ends up (a git repo, a work wiki, a Slack paste) wants to run arbitrary HTML — Markdown travels better there. The PDF is for places that want a fixed, printable file (an email attachment, a ticket, a printout); it loses the interactivity, so it's an extra, not a replacement. HTML + Markdown is the default because together they cover reading and reuse.
 
 ## Before writing: gather the real content first
 
@@ -17,7 +29,7 @@ Don't start from the template. Start from the actual facts, numbers, trade-offs,
 
 ## HTML structure
 
-Build one `<html>` file, inline `<style>` and `<script>`, nothing loaded from a CDN or network — it has to open and work offline, forever, with no dependency rot. Rough shape for explainers and comparisons, adapt section count/order to the topic (step-by-step guides use the outline under **Guides and fill-in fields** instead):
+Build the HTML whenever HTML or PDF was chosen (the PDF is printed from it; if only PDF was chosen, build the HTML in a scratch location and don't deliver it). Build one `<html>` file, inline `<style>` and `<script>`, nothing loaded from a CDN or network — it has to open and work offline, forever, with no dependency rot. Rough shape for explainers and comparisons, adapt section count/order to the topic (step-by-step guides use the outline under **Guides and fill-in fields** instead):
 
 1. **Header** — title, one-line description, maybe a short stats row if there are a few headline numbers worth surfacing immediately.
 2. **Why this / the problem** — a short plain-language framing before diving into mechanics. If there's a real-world analogy that helps (e.g. "think of the broker as the front desk for a building with many tenant companies"), use it.
@@ -31,7 +43,41 @@ Build one `<html>` file, inline `<style>` and `<script>`, nothing loaded from a 
 
 ### Light/dark theme
 
-Use CSS custom properties on `:root`, overridden under a `[data-theme="dark"]` (or `.dark`) selector, flipped by a small toggle button. Persist the choice with `localStorage` — these are delivered as real files opened in a real browser, not in-conversation artifact previews, so `localStorage` is safe to use here (unlike chat-rendered artifacts, where it silently fails). Default to light (`color-scheme: light` on `:root`) unless the user asks otherwise.
+**Default to the system theme**: with no saved choice, the page follows the reader's OS/browser light/dark setting (`prefers-color-scheme`) and switches live if that setting changes. A small toggle button in the header cycles **System → Light → Dark** and shows the current mode ("Theme: System"). Persist an explicit Light or Dark choice with `localStorage` (keyed per doc, like the fields' `STORE`); choosing System removes the saved key. These are delivered as real files opened in a real browser, not in-conversation artifact previews, so `localStorage` is safe to use here (unlike chat-rendered artifacts, where it silently fails). Only start in a fixed theme if the user asks for one.
+
+Use CSS custom properties on `:root` for the light palette, overridden under `[data-theme="dark"]`. The script always sets `data-theme` to the *resolved* theme, so the CSS needs only that one dark selector. Put the first part in a `<script>` at the top of `<head>` so the page never flashes the wrong theme:
+
+```css
+:root{color-scheme:light; /* light palette vars */}
+[data-theme="dark"]{color-scheme:dark; /* dark palette vars */}
+```
+
+```html
+<!-- top of <head> -->
+<script>
+  var THEME_KEY = 'topic-name-theme';
+  var darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+  function savedTheme() { try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; } } // 'light' | 'dark' | null (= system)
+  function applyTheme() { var t = savedTheme(); document.documentElement.setAttribute('data-theme', t || (darkMQ.matches ? 'dark' : 'light')); }
+  applyTheme();
+</script>
+```
+
+```html
+<button type="button" class="theme-btn" id="theme-btn"></button>
+```
+
+```js
+var themeBtn = document.getElementById('theme-btn');
+function labelTheme() { var t = savedTheme(); themeBtn.textContent = 'Theme: ' + (t === 'light' ? 'Light' : t === 'dark' ? 'Dark' : 'System'); }
+themeBtn.addEventListener('click', function () {
+  var next = { '': 'light', light: 'dark', dark: '' }[savedTheme() || ''];
+  try { if (next) localStorage.setItem(THEME_KEY, next); else localStorage.removeItem(THEME_KEY); } catch (e) {}
+  applyTheme(); labelTheme();
+});
+darkMQ.addEventListener('change', applyTheme); // only changes anything while on System
+labelTheme();
+```
 
 ### Jump-to-section menu
 
@@ -163,6 +209,7 @@ A short background section before Prerequisites is fine when the reader needs co
 - **Format checks** where a value has a known shape (a version like 1.2.3, a port, a ticket key like OPS-123): a `pattern` plus a one-line hint, shown next to the field when the entry doesn't match.
 - **Choice fields** when commands differ by platform or option (OS, shell, package manager): a `<select>` placed before the first step it affects, preset to the likeliest option for this reader, with each variant block marked `data-when`. A difference one sentence can cover doesn't need a choice field.
 - **Output blocks** when the reader has to hand details to someone or something else (a ticket note, a config file, a message to ops): one block that assembles the values into paste-ready text, with its own Copy button.
+- **Sharing the result.** The values bar also has **Save as PDF** (prints the guide with the reader's values and chosen variants filled in), **Download filled copy** (a new `.html` file with the values built in, for sending to a colleague) and **Copy values** (a plain-text `Label: value` list for a ticket or chat). Every doc with fields gets all three.
 - **Remembering is the reader's choice.** Values are saved in the browser for that doc by default. A "Remember my values on this device" checkbox turns that off (and deletes what was saved), and a Reset button clears everything.
 - **Never make a field for a secret.** Passwords, tokens, API keys and private keys must not be typed into the page, saved, or copied by it. Have the command read an environment variable the reader sets in their own shell (`$env:PGPASSWORD`, `"$PGPASSWORD"`), or leave a plain placeholder they replace after pasting, and say which.
 - **No field for a value the author already knows.** Just write it.
@@ -171,24 +218,55 @@ A short background section before Prerequisites is fine when the reader needs co
 
 Before calling it done:
 - Open the file in a real browser (the built-in browser pane, or Claude in Chrome) — don't just eyeball the source.
-- Check both light and dark mode actually render correctly.
+- Check both light and dark mode actually render correctly. With nothing saved, the page should match the system setting (emulate it with the pane's `colorScheme` option if available); the toggle should cycle System → Light → Dark, and a Light/Dark choice should survive a reload while System should not leave a saved key.
 - Check the nav at a wide width (the left pane is visible without clicking anything and stays put while the page scrolls) and at a narrow width (it becomes the top bar, the "Sections" button opens and closes the list, and a jumped-to heading isn't hidden under the bar). In both, links work and the current-section highlight updates on scroll. If the nav lists parts, scroll through a multi-part section: the part highlight follows, the section link stays marked, and with `collapse-subs` only that section's parts are open.
-- If the doc has fill-in fields: type a value and watch every use of it update; press Copy on a block with a value missing and with a malformed one (it should jump to the field, not copy); switch each choice field and check the right blocks show; reload with remembering on (values stay) and off (they're gone); press Reset.
+- If the doc has fill-in fields: type a value and watch every use of it update; press Copy on a block with a value missing and with a malformed one (it should jump to the field, not copy); switch each choice field and check the right blocks show; reload with remembering on (values stay) and off (they're gone); press Reset. Then fill some values and check the share buttons: Copy values gives the `Label: value` list; Download filled copy saves a file that opens with those values and only one set of Copy buttons per block; print preview (Save as PDF) shows the values, only the chosen variants and the values table, with no inputs, nav or buttons.
 - Check the browser console for errors.
 - If the page has a CSS-grid diagram, check it at a narrow width too — grids that assume desktop width should degrade to a stacked layout rather than breaking.
 - Confirm there are no external network calls (no CDN `<script src>`, no remote fonts/images) — everything must be inline.
 
 ## Markdown version
 
-Mirror the HTML's content and heading structure in plain Markdown: same sections, same tables (as Markdown tables), same scenario walkthroughs, same references list. Drop anything that's purely visual/interactive (the theme toggle, the nav menu, CSS-grid diagrams) — render a diagram as a simple ASCII/text sketch or just describe the flow in prose instead. The goal is that someone reading only the `.md` file gets the same information, just without the visual polish.
+Only when Markdown was chosen. Mirror the HTML's content and heading structure in plain Markdown: same sections, same tables (as Markdown tables), same scenario walkthroughs, same references list. Drop anything that's purely visual/interactive (the theme toggle, the nav menu, CSS-grid diagrams) — render a diagram as a simple ASCII/text sketch or just describe the flow in prose instead. The goal is that someone reading only the `.md` file gets the same information, just without the visual polish.
 
 For a doc with fill-in fields, put a **Values used in this guide** table right after Prerequisites (or at the top of a non-guide doc): the placeholder (`<valkey-version>`), what it is, an example, its format, and which steps use it. Commands and output blocks keep the `<name>` placeholders. Steps that depend on a choice field show every variant, each labeled (*Windows (PowerShell)*, *Linux or macOS (bash)*).
 
+## PDF version
+
+Only when PDF was chosen. Print it from the finished, verified HTML so the two never drift apart.
+
+**Print stylesheet.** Every HTML doc gets an `@media print` block, whatever formats were chosen: it makes the reader's own Ctrl+P (and a guide's **Save as PDF** button) look right, and it's what the PDF step prints with:
+
+```css
+@media print{
+  /* always print the light palette, whatever the screen theme: repeat the light vars here, or rely on the PDF step's light emulation */
+  .sidenav, .theme-btn, .values-bar, .copy-btn{display:none !important}
+  .layout{display:block; max-width:none}
+  body{padding:0}
+  pre{white-space:pre-wrap; overflow-wrap:anywhere}  /* long lines wrap instead of being cut off */
+  h2, h3{break-after:avoid}
+  pre, table, figure, .field{break-inside:avoid}
+  a[href^="http"]::after{content:" (" attr(href) ")"; font-size:.8em; color:var(--muted)} /* links stay usable on paper */
+}
+```
+
+A doc with fill-in fields also needs the print rules and print-only values table from [guide-fields.md](guide-fields.md). The PDF this step makes is printed blank (a fresh browser profile has no saved values), so its tokens show `<name>` placeholders and every choice variant appears under its label — the same content as the Markdown file. A reader who wants a PDF with their own values uses the guide's **Save as PDF** button.
+
+**Producing the file.** Use a headless Chromium browser — Microsoft Edge is on every Windows machine; Chrome or Chromium elsewhere:
+
+```bash
+msedge --headless --disable-gpu --no-pdf-header-footer --user-data-dir="<scratch-dir>/edge-profile" --print-to-pdf="C:/path/topic-name.pdf" "file:///C:/path/topic-name.html"
+```
+
+Always pass a throwaway `--user-data-dir`: without it, if the reader already has Edge/Chrome open, the command hands off to that browser, exits 0, and writes no PDF. On Windows, run it through PowerShell's `Start-Process -Wait` so the call waits for the file. Check the PDF exists afterwards. (`chrome`/`google-chrome`/`chromium` take the same flags; on Windows the binaries are usually under `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe` and `C:\Program Files\Google\Chrome\Application\chrome.exe`.) Headless printing uses the light `prefers-color-scheme` by default, so a System-themed page prints light. If no Chromium browser is available, say so and offer the HTML for the reader to print with Ctrl+P instead of reaching for another converter.
+
+**Check it**: open the PDF (or render a page or two to an image) and confirm the nav and buttons are gone, nothing is cut off at the right edge, tables and code blocks aren't split awkwardly, and it's in the light palette.
+
 ## Where to save and how to deliver
 
-- **Project documentation** (about one project: its architecture, setup, stack, a decision made for it): save both files into that project's `docs/` folder, creating it if it doesn't exist.
+- **Project documentation** (about one project: its architecture, setup, stack, a decision made for it): save the chosen files into that project's `docs/` folder, creating it if it doesn't exist.
 - **Research documentation** (cross-project research, tool or vendor comparisons, build-vs-buy studies with no single project as its home): ask the user where it goes, or use a general documentation folder if one is already established in the conversation.
-- Name both files the same way aside from extension (`topic-name.html`, `topic-name.md`).
+- Name every file the same way aside from extension (`topic-name.html`, `topic-name.md`, `topic-name.pdf`). Deliver only the formats that were chosen — a scratch HTML built just to print a PDF stays out of the docs folder.
 - Deliver as files — most sessions can present files directly (`present_files` or similar); use that. If an Artifact-creation tool happens to be available and works in the current session, that's a fine alternative to offer, but don't depend on it — file delivery via the project folder is the dependable path and should be the default plan going in.
 
 ## A note on tone
