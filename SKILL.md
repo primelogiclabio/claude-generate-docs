@@ -5,23 +5,24 @@ description: Generate project documentation or research documentation as a self-
 
 # Generate docs
 
-Produces a doc for a technical topic in up to three formats, all from the same source material — write the content once, then render it once per format:
+Produces a doc for a technical topic in up to four formats, all from the same source material — write the content once, then render it once per format:
 
 - **HTML** — one self-contained `.html` file people can just double-click open.
 - **Markdown** — the same content in a plain `.md` file (for pasting into a wiki, diffing in git, or reading in a terminal).
 - **PDF** — a print of the HTML, for attaching, emailing or printing.
+- **Claude artifact** — the same HTML published as a private page at a claude.ai link, which the user can share from claude.ai. Only offered when this session has the artifact publishing tools (`publish_files` / `publish_version`).
 
 ## Pick the formats first
 
 Before writing anything, settle which formats to produce:
 
-- **If the request already says** ("just the HTML", "markdown only", "and a PDF"), use that and don't ask.
-- **Otherwise ask once**, as a multi-select question with HTML, Markdown and PDF as the choices and HTML + Markdown preselected / marked recommended. Any non-empty combination is valid (HTML only, Markdown only, HTML + PDF, all three…).
+- **If the request already says** ("just the HTML", "markdown only", "and a PDF", "as an artifact", "give me a link"), use that and don't ask.
+- **Otherwise ask once**, as a multi-select question with HTML, Markdown and PDF as the choices (plus Claude artifact when the publishing tools are available) and HTML + Markdown preselected / marked recommended. Any non-empty combination is valid (HTML only, Markdown only, HTML + PDF, artifact only…).
 - **If you can't ask** (a non-interactive or scheduled run), produce HTML + Markdown.
 
 ## Why these shapes
 
-The HTML version is the one people actually read: it's visual, it follows the reader's system light/dark setting (with a toggle to override it), and it has a jump-to-section menu so a 10-section doc doesn't turn into endless scrolling. The Markdown version exists because not every place a doc ends up (a git repo, a work wiki, a Slack paste) wants to run arbitrary HTML — Markdown travels better there. The PDF is for places that want a fixed, printable file (an email attachment, a ticket, a printout); it loses the interactivity, so it's an extra, not a replacement. HTML + Markdown is the default because together they cover reading and reuse.
+The HTML version is the one people actually read: it's visual, it follows the reader's system light/dark setting (with a toggle to override it), and it has a jump-to-section menu so a 10-section doc doesn't turn into endless scrolling. The Markdown version exists because not every place a doc ends up (a git repo, a work wiki, a Slack paste) wants to run arbitrary HTML — Markdown travels better there. The PDF is for places that want a fixed, printable file (an email attachment, a ticket, a printout); it loses the interactivity, so it's an extra, not a replacement. The artifact is for sharing a link instead of a file: colleagues open it in claude.ai with the theme, nav and fields still working. HTML + Markdown is the default because together they cover reading and reuse.
 
 ## Before writing: gather the real content first
 
@@ -29,7 +30,7 @@ Don't start from the template. Start from the actual facts, numbers, trade-offs,
 
 ## HTML structure
 
-Build the HTML whenever HTML or PDF was chosen (the PDF is printed from it; if only PDF was chosen, build the HTML in a scratch location and don't deliver it). Build one `<html>` file, inline `<style>` and `<script>`, nothing loaded from a CDN or network — it has to open and work offline, forever, with no dependency rot. Rough shape for explainers and comparisons, adapt section count/order to the topic (step-by-step guides use the outline under **Guides and fill-in fields** instead):
+Build the HTML whenever HTML, PDF or Claude artifact was chosen (the PDF is printed from it and the artifact is published from it; if only PDF was chosen, build the HTML in a scratch location and don't deliver it). One HTML file serves all three: don't fork a separate artifact version. Build one `<html>` file, inline `<style>` and `<script data-doc>` (always mark the doc's own scripts `data-doc`), nothing loaded from a CDN or network — it has to open and work offline, forever, with no dependency rot. Rough shape for explainers and comparisons, adapt section count/order to the topic (step-by-step guides use the outline under **Guides and fill-in fields** instead):
 
 1. **Header** — title, one-line description, maybe a short stats row if there are a few headline numbers worth surfacing immediately.
 2. **Why this / the problem** — a short plain-language framing before diving into mechanics. If there's a real-world analogy that helps (e.g. "think of the broker as the front desk for a building with many tenant companies"), use it.
@@ -43,7 +44,7 @@ Build the HTML whenever HTML or PDF was chosen (the PDF is printed from it; if o
 
 ### Light/dark theme
 
-**Default to the system theme**: with no saved choice, the page follows the reader's OS/browser light/dark setting (`prefers-color-scheme`) and switches live if that setting changes. A small toggle button in the header cycles **System → Light → Dark** and shows the current mode ("Theme: System"). Persist an explicit Light or Dark choice with `localStorage` (keyed per doc, like the fields' `STORE`); choosing System removes the saved key. These are delivered as real files opened in a real browser, not in-conversation artifact previews, so `localStorage` is safe to use here (unlike chat-rendered artifacts, where it silently fails). Only start in a fixed theme if the user asks for one.
+**Default to the system theme**: with no saved choice, the page follows the reader's OS/browser light/dark setting (`prefers-color-scheme`) and switches live if that setting changes. A small toggle button in the header cycles **System → Light → Dark** and shows the current mode ("Theme: System"). Persist an explicit Light or Dark choice with `localStorage` (keyed per doc, like the fields' `STORE`); choosing System removes the saved key. Wrap every `localStorage` call in `try/catch` (the snippets below do): it works in a local file and usually in a published artifact, but a sandboxed frame may refuse it, and the page must still work — it just forgets the choice. Only start in a fixed theme if the user asks for one.
 
 Use CSS custom properties on `:root` for the light palette, overridden under `[data-theme="dark"]`. The script always sets `data-theme` to the *resolved* theme, so the CSS needs only that one dark selector. Put the first part in a `<script>` at the top of `<head>` so the page never flashes the wrong theme:
 
@@ -53,8 +54,8 @@ Use CSS custom properties on `:root` for the light palette, overridden under `[d
 ```
 
 ```html
-<!-- top of <head> -->
-<script>
+<!-- top of <head>; every script the doc writes is marked data-doc (see guide-fields.md) -->
+<script data-doc>
   var THEME_KEY = 'topic-name-theme';
   var darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
   function savedTheme() { try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; } } // 'light' | 'dark' | null (= system)
@@ -262,12 +263,35 @@ Always pass a throwaway `--user-data-dir`: without it, if the reader already has
 
 **Check it**: open the PDF (or render a page or two to an image) and confirm the nav and buttons are gone, nothing is cut off at the right edge, tables and code blocks aren't split awkwardly, and it's in the light palette.
 
+## Claude artifact version
+
+Only when Claude artifact was chosen. Publish the finished, verified HTML as it is; the snippets in this skill already handle the artifact frame. Read the artifact server's `guide` (topic `pages`) once per session before the first publish, and follow it over this section if they ever disagree.
+
+**What changes inside an artifact**, and how the page copes:
+
+- **Printing is refused.** A guide's **Save as PDF** button hides itself (the fields script detects the artifact by `window.claude`). Ctrl+P in the viewer prints claude.ai, not the doc, so if the user also wants a PDF, choose PDF as a format too.
+- **Direct downloads are refused.** **Download filled copy** goes through the `downloads` capability instead, and the viewer confirms each save. Declare it for any doc with fill-in fields (below); without it the button hides itself.
+- **Copy buttons work** (clipboard writes from a click are allowed; the code already catches a refusal).
+- **Storage may be missing.** `localStorage` keeps the theme and remembered values for one viewer in one browser, and may throw; the snippets wrap every call.
+- **Section ids**: links only pass a plain `#name`, and claude.ai reserves some names. Never use `settings`, `sidebar`, `customize`, `upgrade`, `downloads` or anything starting `comment-` as an `id`.
+- **Nothing loads from outside** — same as the offline rule, so no change. Links to other sites stay plain `<a href>`; the viewer opens them outside the page.
+
+**Publishing**:
+
+1. Write the HTML file first — in the docs folder when HTML was also chosen, otherwise in the same place (the file is the artifact's source, and later updates republish it; tell the user where it is).
+2. Publish it with `publish_files` (`index.html` ← that file), with the doc's `<title>` as `title` and a one-word `icon` such as `book`. Without a files tool, use `publish_version` with the whole HTML as `content`.
+3. If the doc has fill-in fields, call `declare_capabilities` with `{"downloads": true}` on the new artifact, using the version the publish returned as `base_version`.
+4. **Updating a doc that already has an artifact**: republish to the same artifact (`slug` + `base_version` from `get_artifact`, or find it with `list_artifacts` by title) rather than making a new one, so its link and sharing stay the same. If a capability is being added, declare it before publishing the page that uses it.
+5. Give the user the link. New artifacts are private to them; they share it from the artifact's page on claude.ai (the tools can't change sharing).
+
+**Check it**: open the link in the browser pane (the user may need to sign in to claude.ai there). Check the theme follows the system setting and the toggle works, the nav jumps and highlights, and for a guide: tokens update as you type, Copy values copies, Save as PDF is hidden, and Download filled copy brings up the save confirmation (decline it — no need to download).
+
 ## Where to save and how to deliver
 
 - **Project documentation** (about one project: its architecture, setup, stack, a decision made for it): save the chosen files into that project's `docs/` folder, creating it if it doesn't exist.
 - **Research documentation** (cross-project research, tool or vendor comparisons, build-vs-buy studies with no single project as its home): ask the user where it goes, or use a general documentation folder if one is already established in the conversation.
 - Name every file the same way aside from extension (`topic-name.html`, `topic-name.md`, `topic-name.pdf`). Deliver only the formats that were chosen — a scratch HTML built just to print a PDF stays out of the docs folder.
-- Deliver as files — most sessions can present files directly (`present_files` or similar); use that. If an Artifact-creation tool happens to be available and works in the current session, that's a fine alternative to offer, but don't depend on it — file delivery via the project folder is the dependable path and should be the default plan going in.
+- Deliver files directly when the session can present them (`present_files`, `SendUserFile` or similar), and say where they were saved. An artifact is delivered as its link.
 
 ## A note on tone
 

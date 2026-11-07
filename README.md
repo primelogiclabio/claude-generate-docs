@@ -3,9 +3,9 @@
 A skill that generates **project documentation** and **research
 documentation**, such as architecture overviews, stack and tool comparisons,
 decision docs and research write-ups, plus step-by-step **guides** (how-tos,
-setup steps, runbooks). You pick the formats — HTML, Markdown, PDF, or any
-mix; if you don't say, Claude asks, defaulting to HTML + Markdown. All files
-share one name:
+setup steps, runbooks). You pick the formats — HTML, Markdown, PDF, a Claude
+artifact, or any mix; if you don't say, Claude asks, defaulting to HTML +
+Markdown. The files share one name:
 
 - **`topic.html`**: self-contained, with inline CSS and JS and no network
   calls, so it opens offline by double-clicking. It follows your system's
@@ -33,6 +33,12 @@ share one name:
   chat paste.
 - **`topic.pdf`**: a print of the HTML, without the menu and buttons, for
   attaching or printing. Made with headless Edge or Chrome.
+- **Claude artifact**: the same HTML published as a private claude.ai page,
+  so you can share a link instead of a file (share it from the artifact's
+  page on claude.ai). Theme, menu, fields and copy buttons all work there;
+  Save as PDF is hidden, because artifacts can't print, and Download filled
+  copy asks you to confirm the save. Needs the claude.ai artifacts connector
+  in the session.
 
 The skill tells Claude to:
 
@@ -71,11 +77,15 @@ add the topic. When it's installed as a plugin, its full name is
 | Where | Works? | How to get it there |
 | --- | --- | --- |
 | Claude Code CLI, desktop Code tab, VS Code | ✔ full skill | Install from the marketplace on this computer (path 1), or sync it from your claude.ai account |
-| claude.ai web, desktop Chat, Cowork, mobile | ✔ but the browser check and saving to `docs/` are skipped; the files come back as downloads | On your claude.ai account (path 2): add the `primelogiclabio/claude-tools` marketplace under **Customize › Plugins**, upload the folder as a zip, or keep it as an account skill |
+| claude.ai web, desktop Chat, Cowork, mobile | ✔ HTML and Markdown, but the browser check and saving to `docs/` are skipped; the files come back as downloads. PDF only if the sandbox has a Chromium browser | On your claude.ai account (path 2): add the `primelogiclabio/claude-tools` marketplace under **Customize › Plugins**, upload the folder as a zip, or keep it as an account skill |
 | Claude Code cloud sessions (claude.ai/code) | ✔ only if it's on your claude.ai account | Path 2 |
 
 Outside Claude Code, skills need a Pro, Max, Team or Enterprise plan, with
 **Code execution and file creation** turned on in **Settings › Capabilities**.
+
+The **Claude artifact** format is offered only in sessions that have the
+claude.ai artifacts connector (its `publish_files` / `publish_version`
+tools). Without it, the format question leaves that choice out.
 
 ## Install
 
@@ -118,6 +128,10 @@ The step-by-step instructions for both paths are in the
   - an old `reference-doc` account skill: turn it off.
 - **It needs a browser.** It has no runtime dependencies, but its check step
   expects one: the desktop app's built-in browser pane, or Claude in Chrome.
+  Checking an artifact also needs you signed in to claude.ai in that browser.
+- **PDF needs Edge or Chrome** on the computer, which Claude runs headless to
+  print the HTML. Edge comes with Windows. Without either, Claude says so and
+  gives you the HTML to print yourself.
 
 ## Developing
 
@@ -128,7 +142,13 @@ claude plugin validate .
 ```
 
 It's a skill with no code, so there are no tests. To try a change, ask for a
-write-up in a new session.
+write-up in a new session. To try the HTML snippets in an artifact, publish a
+test page built from them, open it signed in to claude.ai, then delete it.
+
+When a change reaches users, bump `version` in `.claude-plugin/plugin.json`:
+the marketplace moves its pin to a new commit only when the version changes.
+If the `description` changes, update the marketplace entry in `claude-tools`
+to match.
 
 ## Files
 
