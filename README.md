@@ -3,9 +3,9 @@
 A skill that generates **project documentation** and **research
 documentation**, such as architecture overviews, stack and tool comparisons,
 decision docs and research write-ups, plus step-by-step **guides** (how-tos,
-setup steps, runbooks). You pick the formats — HTML, Markdown, PDF, or any
-mix; if you don't say, Claude asks, defaulting to HTML + Markdown. All files
-share one name:
+setup steps, runbooks). You pick the formats — HTML, Markdown, PDF, a Claude
+artifact, or any mix; if you don't say, Claude asks, defaulting to HTML +
+Markdown. All files share one name:
 
 - **`topic.html`**: self-contained, with inline CSS and JS and no network
   calls, so it opens offline by double-clicking. It follows your system's
@@ -33,6 +33,12 @@ share one name:
   chat paste.
 - **`topic.pdf`**: a print of the HTML, without the menu and buttons, for
   attaching or printing. Made with headless Edge or Chrome.
+- **Claude artifact**: the same HTML published as a private claude.ai page,
+  so you can share a link instead of a file (share it from the artifact's
+  page on claude.ai). Theme, menu, fields and copy buttons all work there;
+  Save as PDF is hidden, because artifacts can't print, and Download filled
+  copy asks you to confirm the save. Needs the claude.ai artifacts connector
+  in the session.
 
 The skill tells Claude to:
 

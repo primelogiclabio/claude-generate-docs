@@ -1,9 +1,9 @@
 {
   "name": "generate-docs",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "license": "MIT",
   "author": { "name": "prime" },
-  "description": "Skill: generate project or research documentation, or step-by-step guides with fill-in fields, as a self-contained HTML file plus matching Markdown (light/dark toggle, jump-to-section menu, no network calls)",
+  "description": "Skill: generate project or research documentation, or step-by-step guides with fill-in fields, as self-contained HTML, Markdown, PDF or a Claude artifact (system/light/dark theme, jump-to-section menu, shareable filled-in guides, no network calls)",
   "homepage": "https://github.com/primelogiclabio/claude-generate-docs",
   "repository": "https://github.com/primelogiclabio/claude-generate-docs",
   "skills": ["./"]

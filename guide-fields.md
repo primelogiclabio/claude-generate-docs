@@ -20,6 +20,8 @@ The values bar goes once, in the header: the remember/reset control plus three w
 - **Download filled copy** saves a new `.html` file (`<name>-filled.html`) with the values built in as the fields' defaults. Whoever opens it sees the values, can still edit them, and Reset returns to them. It keeps its own storage, so it never mixes with the original's saved values.
 - **Copy values** copies a plain-text list (`Label: value`, one per line, under the doc's title) for pasting into a ticket, chat or email. Each code and output block keeps its own Copy button for pasting commands.
 
+The same page works as a published Claude artifact, where the frame refuses printing and direct downloads: the script hides **Save as PDF** there, and **Download filled copy** goes through the artifact's `downloads` capability (the viewer confirms the save). Declare that capability when publishing (see SKILL.md); if it's missing, the button hides itself.
+
 A print-only table of the values goes right after the header, one row per field, with a token in each value cell (a choice field's token shows the chosen option's text, and its row has class `choice`):
 
 ```html
@@ -123,14 +125,17 @@ This goes alongside the page's general `@media print` block from SKILL.md (which
 
 Values are saved in the browser's `localStorage`, never written into the HTML file: they stay on that browser on that device, and someone you send the file to sees empty fields (that's what **Download filled copy** is for). Set `NAME` to the doc's file name without extension: it's the storage key and the downloaded copy's name. Chrome and Edge give every `file://` page the same storage, so without a unique key two guides would share values.
 
-**Make this the first `<script>` in `<body>`**, before the nav and theme-button code: its first line captures the page's untouched HTML for **Download filled copy**, and that has to happen before any script changes the page.
+**Make this the last `<script>` in `<body>`**, after the nav and theme-button code: its first line records the page's HTML for **Download filled copy**, and only what the browser has read so far gets recorded, so a script placed after it would be missing from the copy. (What the nav and theme scripts have already changed by then, the current-section mark and the button label, is recomputed when the copy opens.)
+
+**Mark every one of the doc's own `<script>` tags `data-doc`** (`<script data-doc>`), including the theme script in `<head>`. The filled copy keeps only marked scripts, because a Claude artifact frame injects its own runtime scripts, with session data, into the page; an unmarked doc script would be dropped from the copy.
 
 ```js
 (function () {
-  var SOURCE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML; // first, before anything changes the page
+  var SOURCE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML; // first line of the last script: every script is read, none of this one's changes made yet
   var NAME = 'valkey-postgres-guide';
   var filledStamp = document.documentElement.getAttribute('data-filled'); // set in downloaded filled copies
   var STORE = NAME + (filledStamp ? '-filled-' + filledStamp : '');      // each filled copy keeps its own storage
+  var inArtifact = !!(window.claude && typeof window.claude.use === 'function'); // published as a Claude artifact
   var fields = {}, touched = {};
   document.querySelectorAll('input[data-field], select[data-field]').forEach(function (el) { fields[el.getAttribute('data-field')] = el; });
   var remember = document.getElementById('values-remember');
@@ -225,18 +230,32 @@ Values are saved in the browser's `localStorage`, never written into the HTML fi
       if (el.tagName === 'SELECT') Array.prototype.forEach.call(el.options, function (o) { o.toggleAttribute('selected', o.value === fields[name].value); });
       else el.setAttribute('value', fields[name].value);
     });
+    // keep only the doc's own scripts: an artifact frame injects its runtime (with session data) into <head>
+    doc.querySelectorAll('script:not([data-doc])').forEach(function (s) { s.remove(); });
     doc.documentElement.removeAttribute('data-theme');
     doc.documentElement.setAttribute('data-filled', String(Date.now()));
+    var html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML, file = NAME + '-filled.html';
+    if (inArtifact) { // the artifact frame blocks <a download>; the downloads capability asks the viewer to confirm
+      return window.claude.use('downloads').then(function (dl) {
+        if (!dl) throw { code: 'unavailable' };
+        return dl.save({ filename: file, data: html });
+      });
+    }
     var a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob(['<!DOCTYPE html>\n' + doc.documentElement.outerHTML], { type: 'text/html' }));
-    a.download = NAME + '-filled.html';
+    a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    a.download = file;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    return Promise.resolve();
   }
   function copyText(text) {
-    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+    // the clipboard API can be refused (a Claude artifact frame refuses it); fall back to the older copy command
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text).catch(function () { return legacyCopy(text); });
+    return legacyCopy(text);
+  }
+  function legacyCopy(text) {
     return new Promise(function (ok, fail) {
       var ta = document.createElement('textarea');
       ta.value = text;
@@ -280,15 +299,25 @@ Values are saved in the browser's `localStorage`, never written into the HTML fi
     render();
   });
 
-  var printFilled = false;
-  document.getElementById('values-pdf').addEventListener('click', function () { printFilled = true; window.print(); });
+  var printFilled = false, pdfBtn = document.getElementById('values-pdf'), dlBtn = document.getElementById('values-download');
+  pdfBtn.addEventListener('click', function () { printFilled = true; window.print(); });
+  if (inArtifact) {
+    pdfBtn.hidden = true; // the artifact frame ignores window.print
+    window.claude.use('downloads').then(function (dl) { if (!dl) dlBtn.hidden = true; }); // capability not declared or not available here
+  }
   // a print with values shows only the chosen variants; a blank one (Ctrl+P on an empty guide, headless PDF) shows them all
   window.addEventListener('beforeprint', function () {
     var any = Object.keys(fields).some(function (n) { return fields[n].tagName !== 'SELECT' && value(n); });
     document.documentElement.classList.toggle('filled', printFilled || any);
     printFilled = false;
   });
-  document.getElementById('values-download').addEventListener('click', downloadFilled);
+  dlBtn.addEventListener('click', function () {
+    downloadFilled().then(function () { if (inArtifact) flash(dlBtn, 'Saved'); }, function (e) {
+      if (e && e.code === 'declined') flash(dlBtn, 'Cancelled');
+      else if (e && e.code === 'rate_limited') flash(dlBtn, 'Busy: try again');
+      else { flash(dlBtn, 'Download not available here'); }
+    });
+  });
   var copyBtn = document.getElementById('values-copy');
   copyBtn.addEventListener('click', function () {
     copyText(valuesText()).then(function () { flash(copyBtn, 'Copied'); }, function () { flash(copyBtn, 'Copy failed'); });
