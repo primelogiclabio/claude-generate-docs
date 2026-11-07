@@ -3,10 +3,13 @@
 A skill that generates **project documentation** and **research
 documentation**, such as architecture overviews, stack and tool comparisons,
 decision docs and research write-ups, plus step-by-step **guides** (how-tos,
-setup steps, runbooks). Each doc is two files that share one name:
+setup steps, runbooks). You pick the formats — HTML, Markdown, PDF, or any
+mix; if you don't say, Claude asks, defaulting to HTML + Markdown. All files
+share one name:
 
 - **`topic.html`**: self-contained, with inline CSS and JS and no network
-  calls, so it opens offline by double-clicking. It has a light/dark toggle and
+  calls, so it opens offline by double-clicking. It follows your system's
+  light/dark setting, with a toggle that cycles System, Light and Dark, and
   a section menu that highlights the section you're reading: a left pane on
   wide screens, a drop-down from a top bar on narrow ones. Sections with
   several parts get nested links to each part.
@@ -16,11 +19,20 @@ setup steps, runbooks). Each doc is two files that share one name:
   first needs it, and every command and paste-ready block that uses it updates.
   Every code block has a Copy button, which sends you to the right field if a
   value is missing or in the wrong format. A choice field (Windows or Linux,
-  say) shows only the matching commands. Values are remembered in your browser
+  say) shows only the matching commands. Values are remembered in your
+  browser's local storage (not in the file, so they don't travel with it)
   unless you turn that off, and Reset clears them. Passwords and keys are
   never fields.
+
+  To share what you filled in, a guide has three buttons: **Save as PDF**
+  (your values and chosen commands, ready to print or attach), **Download
+  filled copy** (a new HTML file with your values built in, for a
+  colleague to open and keep editing) and **Copy values** (a plain
+  `Label: value` list to paste into a ticket or chat).
 - **`topic.md`**: the same content in plain Markdown, for git, a wiki or a
   chat paste.
+- **`topic.pdf`**: a print of the HTML, without the menu and buttons, for
+  attaching or printing. Made with headless Edge or Chrome.
 
 The skill tells Claude to:
 
