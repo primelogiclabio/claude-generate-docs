@@ -125,7 +125,7 @@ This goes alongside the page's general `@media print` block from SKILL.md (which
 
 Values are saved in the browser's `localStorage`, never written into the HTML file: they stay on that browser on that device, and someone you send the file to sees empty fields (that's what **Download filled copy** is for). Set `NAME` to the doc's file name without extension: it's the storage key and the downloaded copy's name. Chrome and Edge give every `file://` page the same storage, so without a unique key two guides would share values.
 
-**Make this the last `<script>` in `<body>`**, after the nav and theme-button code: its first line records the page's HTML for **Download filled copy**, and only what the browser has read so far gets recorded, so a script placed after it would be missing from the copy. (What the nav and theme scripts have already changed by then, the current-section mark and the button label, is recomputed when the copy opens.)
+**Make this the last `<script>` in `<body>`**, after the nav and theme-button code: its first line records the page's HTML for **Download filled copy**, and only what the browser has read so far gets recorded, so a script placed after it would be missing from the copy. (What the nav and theme scripts have already changed by then, the current-section mark, the theme button's label and the pressed accent swatch, is recomputed when the copy opens.)
 
 **Mark every one of the doc's own `<script>` tags `data-doc`** (`<script data-doc>`), including the theme script in `<head>`. The filled copy keeps only marked scripts, because a Claude artifact frame injects its own runtime scripts, with session data, into the page; an unmarked doc script would be dropped from the copy.
 
