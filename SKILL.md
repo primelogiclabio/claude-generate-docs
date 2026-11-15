@@ -22,7 +22,7 @@ Before writing anything, settle which formats to produce:
 
 ## Why these shapes
 
-The HTML version is the one people actually read: it's visual, it follows the reader's system light/dark setting (with a toggle to override it), and it has a jump-to-section menu so a 10-section doc doesn't turn into endless scrolling. The Markdown version exists because not every place a doc ends up (a git repo, a work wiki, a Slack paste) wants to run arbitrary HTML — Markdown travels better there. The PDF is for places that want a fixed, printable file (an email attachment, a ticket, a printout); it loses the interactivity, so it's an extra, not a replacement. The artifact is for sharing a link instead of a file: colleagues open it in claude.ai with the theme, nav and fields still working. HTML + Markdown is the default because together they cover reading and reuse.
+The HTML version is the one people actually read: it's visual, it follows the reader's system light/dark setting (with a toggle to override it, and a choice of accent colour), and it has a jump-to-section menu so a 10-section doc doesn't turn into endless scrolling. The Markdown version exists because not every place a doc ends up (a git repo, a work wiki, a Slack paste) wants to run arbitrary HTML — Markdown travels better there. The PDF is for places that want a fixed, printable file (an email attachment, a ticket, a printout); it loses the interactivity, so it's an extra, not a replacement. The artifact is for sharing a link instead of a file: colleagues open it in claude.ai with the theme, nav and fields still working. HTML + Markdown is the default because together they cover reading and reuse.
 
 ## Before writing: gather the real content first
 
@@ -46,11 +46,11 @@ Build the HTML whenever HTML, PDF or Claude artifact was chosen (the PDF is prin
 
 **Default to the system theme**: with no saved choice, the page follows the reader's OS/browser light/dark setting (`prefers-color-scheme`) and switches live if that setting changes. A small toggle button in the header cycles **System → Light → Dark** and shows the current mode ("Theme: System"). Persist an explicit Light or Dark choice with `localStorage` (keyed per doc, like the fields' `STORE`); choosing System removes the saved key. Wrap every `localStorage` call in `try/catch` (the snippets below do): it works in a local file and usually in a published artifact, but a sandboxed frame may refuse it, and the page must still work — it just forgets the choice. Only start in a fixed theme if the user asks for one.
 
-Use CSS custom properties on `:root` for the light palette, overridden under `[data-theme="dark"]`. The script always sets `data-theme` to the *resolved* theme, so the CSS needs only that one dark selector. Put the first part in a `<script>` at the top of `<head>` so the page never flashes the wrong theme:
+Use CSS custom properties on `:root` for the light palette, overridden under `[data-theme="dark"]`. The script always sets `data-theme` to the *resolved* theme, so the CSS needs only that one dark selector. Leave `--accent` and `--accent-soft` out of both palettes: the accent rules (below) set them. Put the first part in a `<script>` at the top of `<head>` so the page never flashes the wrong theme or accent:
 
 ```css
-:root{color-scheme:light; /* light palette vars */}
-[data-theme="dark"]{color-scheme:dark; /* dark palette vars */}
+:root{color-scheme:light; /* light palette vars, no --accent */}
+[data-theme="dark"]{color-scheme:dark; /* dark palette vars, no --accent */}
 ```
 
 ```html
@@ -61,11 +61,18 @@ Use CSS custom properties on `:root` for the light palette, overridden under `[d
   function savedTheme() { try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; } } // 'light' | 'dark' | null (= system)
   function applyTheme() { var t = savedTheme(); document.documentElement.setAttribute('data-theme', t || (darkMQ.matches ? 'dark' : 'light')); }
   applyTheme();
+  // accent colour (see Accent colour below): the reader's saved pick, or the doc's default
+  var ACCENT_KEY = 'topic-name-accent', ACCENT_DEFAULT = 'blue', ACCENTS = ['blue', 'teal', 'green', 'purple', 'orange', 'pink'];
+  function savedAccent() { try { var a = localStorage.getItem(ACCENT_KEY); return ACCENTS.indexOf(a) >= 0 ? a : null; } catch (e) { return null; } }
+  document.documentElement.setAttribute('data-accent', savedAccent() || ACCENT_DEFAULT);
 </script>
 ```
 
 ```html
-<button type="button" class="theme-btn" id="theme-btn"></button>
+<div class="theme-tools"> <!-- in the header -->
+  <button type="button" class="theme-btn" id="theme-btn"></button>
+  <!-- the accent swatches (below) -->
+</div>
 ```
 
 ```js
@@ -78,6 +85,65 @@ themeBtn.addEventListener('click', function () {
 });
 darkMQ.addEventListener('change', applyTheme); // only changes anything while on System
 labelTheme();
+```
+
+### Accent colour
+
+**Every HTML doc lets the reader pick its accent colour**: a row of six swatches next to the theme button. The accent colours links, the current-section mark and anything else the doc highlights, and each swatch has a light and a dark value, so a pick works in either theme. Set `ACCENT_DEFAULT` to the swatch that suits the topic. Save the reader's pick per doc like the theme (`ACCENT_KEY`, in `try/catch`), and remove the key when they pick the default again. If the user asks for a particular colour, add it as a seventh accent, with a light and a dark value that each reach 4.5:1 against the page and surface backgrounds, and make it the default.
+
+The accent rules set `--accent` and `--accent-soft`. Derive any other accent tint from `--accent` with `color-mix()` rather than writing a fixed colour, or a swatch won't change it. The dark values sit in `@media screen`, so a print uses the light value of the reader's accent.
+
+```css
+/* on <html> (set by the head script) and on each swatch, so a swatch shows its own colour */
+[data-accent="blue"]{--accent:#2556c4}
+[data-accent="teal"]{--accent:#0f6e6e}
+[data-accent="green"]{--accent:#27702b}
+[data-accent="purple"]{--accent:#6d3fc0}
+[data-accent="orange"]{--accent:#a84a08}
+[data-accent="pink"]{--accent:#be185d}
+@media screen{
+  [data-theme="dark"][data-accent="blue"], [data-theme="dark"] [data-accent="blue"]{--accent:#86a8ff}
+  [data-theme="dark"][data-accent="teal"], [data-theme="dark"] [data-accent="teal"]{--accent:#5cc8c0}
+  [data-theme="dark"][data-accent="green"], [data-theme="dark"] [data-accent="green"]{--accent:#7bd389}
+  [data-theme="dark"][data-accent="purple"], [data-theme="dark"] [data-accent="purple"]{--accent:#b69cff}
+  [data-theme="dark"][data-accent="orange"], [data-theme="dark"] [data-accent="orange"]{--accent:#f5a35c}
+  [data-theme="dark"][data-accent="pink"], [data-theme="dark"] [data-accent="pink"]{--accent:#f48fb8}
+}
+:root{--accent-soft:color-mix(in srgb, var(--accent) 12%, var(--bg))}
+.theme-tools{display:flex; flex-wrap:wrap; align-items:center; gap:12px}
+.accent-pick{display:flex; gap:6px}
+.swatch{width:20px; height:20px; padding:0; border-radius:50%; border:1px solid var(--line-strong); background:var(--accent); cursor:pointer}
+.swatch[aria-pressed="true"]{box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--fg)}
+.swatch:focus-visible{outline:2px solid var(--fg); outline-offset:4px}
+```
+
+Each value reaches 4.5:1 against near-white (`#fff` to `#f1f3f7`) and near-black (`#14171c` to `#23272f`) backgrounds; keep the page's `--bg` and `--surface` in those ranges, or recheck.
+
+Write the swatches into the HTML, inside `.theme-tools` after the theme button, rather than building them in the script: a guide's **Download filled copy** records the page after the scripts have run, so built buttons would be built a second time when the copy opens.
+
+```html
+<div class="accent-pick" role="group" aria-label="Accent colour">
+  <button type="button" class="swatch" data-accent="blue" title="Blue" aria-label="Blue"></button>
+  <button type="button" class="swatch" data-accent="teal" title="Teal" aria-label="Teal"></button>
+  <button type="button" class="swatch" data-accent="green" title="Green" aria-label="Green"></button>
+  <button type="button" class="swatch" data-accent="purple" title="Purple" aria-label="Purple"></button>
+  <button type="button" class="swatch" data-accent="orange" title="Orange" aria-label="Orange"></button>
+  <button type="button" class="swatch" data-accent="pink" title="Pink" aria-label="Pink"></button>
+</div>
+```
+
+```js
+var swatches = Array.prototype.slice.call(document.querySelectorAll('.swatch'));
+function markAccent() { var a = document.documentElement.getAttribute('data-accent'); swatches.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-accent') === a)); }); }
+swatches.forEach(function (b) {
+  b.addEventListener('click', function () {
+    var a = b.getAttribute('data-accent');
+    try { if (a === ACCENT_DEFAULT) localStorage.removeItem(ACCENT_KEY); else localStorage.setItem(ACCENT_KEY, a); } catch (e) {}
+    document.documentElement.setAttribute('data-accent', a); // set directly, so the pick still applies when storage is refused
+    markAccent();
+  });
+});
+markAccent();
 ```
 
 ### Jump-to-section menu
@@ -238,6 +304,7 @@ A short background section before Prerequisites is fine when the reader needs co
 Before calling it done:
 - Open the file in a real browser (the built-in browser pane, or Claude in Chrome) — don't just eyeball the source.
 - Check both light and dark mode actually render correctly. With nothing saved, the page should match the system setting (emulate it with the pane's `colorScheme` option if available); the toggle should cycle System → Light → Dark, and a Light/Dark choice should survive a reload while System should not leave a saved key.
+- Click each accent swatch in light and in dark mode: links, the nav mark and every accent tint change with it, and the pressed swatch is ringed. A pick should survive a reload, and picking the default again should leave no saved key. Print preview should use the light value of the picked accent.
 - Check the nav at a wide width (the left pane is visible without clicking anything and stays put while the page scrolls) and at a narrow width (it becomes the top bar, the "Sections" button opens and closes the list, and a jumped-to heading isn't hidden under the bar). In both, links work and the current-section highlight updates on scroll; clicking a short section's link or the last one marks that link, not the next one. If the nav lists parts, scroll through a multi-part section: the part highlight follows, the section link stays marked, and with `collapse-subs` only that section's parts are open.
 - If the doc has fill-in fields: type a value and watch every use of it update; press Copy on a block with a value missing and with a malformed one (it should jump to the field, not copy); switch each choice field and check the right blocks show; reload with remembering on (values stay) and off (they're gone); press Reset. Then fill some values and check the share buttons: Copy values gives the `Label: value` list; Download filled copy saves a file that opens with those values and only one set of Copy buttons per block; print preview (Save as PDF) shows the values, only the chosen variants and the values table, with no inputs, nav or buttons.
 - Check the browser console for errors.
@@ -246,7 +313,7 @@ Before calling it done:
 
 ## Markdown version
 
-Only when Markdown was chosen. Mirror the HTML's content and heading structure in plain Markdown: same sections, same tables (as Markdown tables), same scenario walkthroughs, same references list. Drop anything that's purely visual/interactive (the theme toggle, the nav menu, CSS-grid diagrams) — render a diagram as a simple ASCII/text sketch or just describe the flow in prose instead. The goal is that someone reading only the `.md` file gets the same information, just without the visual polish.
+Only when Markdown was chosen. Mirror the HTML's content and heading structure in plain Markdown: same sections, same tables (as Markdown tables), same scenario walkthroughs, same references list. Drop anything that's purely visual/interactive (the theme toggle, the accent swatches, the nav menu, CSS-grid diagrams) — render a diagram as a simple ASCII/text sketch or just describe the flow in prose instead. The goal is that someone reading only the `.md` file gets the same information, just without the visual polish.
 
 For a doc with fill-in fields, put a **Values used in this guide** table right after Prerequisites (or at the top of a non-guide doc): the placeholder (`<valkey-version>`), what it is, an example, its format, and which steps use it. Commands and output blocks keep the `<name>` placeholders. Steps that depend on a choice field show every variant, each labeled (*Windows (PowerShell)*, *Linux or macOS (bash)*).
 
@@ -258,8 +325,8 @@ Only when PDF was chosen. Print it from the finished, verified HTML so the two n
 
 ```css
 @media print{
-  /* always print the light palette, whatever the screen theme: repeat the light vars here, or rely on the PDF step's light emulation */
-  .sidenav, .theme-btn, .values-bar, .copy-btn{display:none !important}
+  /* always print the light palette, whatever the screen theme: repeat the light vars here (not --accent: the accent rules print its light value), or rely on the PDF step's light emulation */
+  .sidenav, .theme-tools, .values-bar, .copy-btn{display:none !important}
   .layout{display:block; max-width:none}
   body{padding:0}
   pre{white-space:pre-wrap; overflow-wrap:anywhere}  /* long lines wrap instead of being cut off */

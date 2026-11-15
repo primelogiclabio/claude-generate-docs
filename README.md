@@ -9,7 +9,8 @@ Markdown. The files share one name:
 
 - **`topic.html`**: self-contained, with inline CSS and JS and no network
   calls, so it opens offline by double-clicking. It follows your system's
-  light/dark setting, with a toggle that cycles System, Light and Dark, and
+  light/dark setting, with a toggle that cycles System, Light and Dark,
+  swatches for picking the accent colour (remembered per doc), and
   a section menu that highlights the section you're reading: a left pane on
   wide screens, a drop-down from a top bar on narrow ones. Sections with
   several parts get nested links to each part.
