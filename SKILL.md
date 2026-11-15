@@ -146,6 +146,21 @@ swatches.forEach(function (b) {
 markAccent();
 ```
 
+### Section headings
+
+**Make every heading level look different from the text and from each other**, so a reader skimming the page sees where each section starts and where its parts are. Each section (`<h2>`) opens with a banner: a band tinted with the accent, with a solid accent bar on its left. Each part (`<h3>`) is in the accent colour with a rule under it. An `<h4>` is a small muted label. All three follow the reader's accent and theme.
+
+```css
+main h2{margin:56px 0 16px; padding:12px 18px; font-size:1.4rem; line-height:1.3; letter-spacing:-.005em;
+  background:color-mix(in srgb, var(--accent) 16%, var(--bg)); border-left:6px solid var(--accent); border-radius:0 10px 10px 0;
+  -webkit-print-color-adjust:exact; print-color-adjust:exact} /* the band prints too */
+main h3{margin:32px 0 10px; padding-bottom:6px; font-size:1.15rem; line-height:1.35; color:var(--accent); border-bottom:1px solid var(--line)}
+main h4{margin:20px 0 6px; font-size:.8rem; letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
+main h2 + h3{margin-top:20px} /* a part right under its banner */
+```
+
+Titles inside cards, panels or grid cells are labels, not parts of the page outline: give them their own quieter style (`.card h3{color:var(--fg); border:0; padding:0; margin:0 0 6px}`), so a grid of cards doesn't look like a run of parts. Keep the banner off the `<h1>` title and the header.
+
 ### Jump-to-section menu
 
 Every doc gets a navigation menu linking to each major section. This is what "context menu" or "nav menu" requests are almost always asking for, as distinct from a literal right-click menu — check with the user once if a request is ambiguous, but default to this reading.
@@ -305,6 +320,7 @@ Before calling it done:
 - Open the file in a real browser (the built-in browser pane, or Claude in Chrome) — don't just eyeball the source.
 - Check both light and dark mode actually render correctly. With nothing saved, the page should match the system setting (emulate it with the pane's `colorScheme` option if available); the toggle should cycle System → Light → Dark, and a Light/Dark choice should survive a reload while System should not leave a saved key.
 - Click each accent swatch in light and in dark mode: links, the nav mark and every accent tint change with it, and the pressed swatch is ringed. A pick should survive a reload, and picking the default again should leave no saved key. Print preview should use the light value of the picked accent.
+- Skim the page: every section opens with its banner, parts stand out in the accent colour with a rule under them, and card titles don't look like parts. Check this in light, dark and print preview.
 - Check the nav at a wide width (the left pane is visible without clicking anything and stays put while the page scrolls) and at a narrow width (it becomes the top bar, the "Sections" button opens and closes the list, and a jumped-to heading isn't hidden under the bar). In both, links work and the current-section highlight updates on scroll; clicking a short section's link or the last one marks that link, not the next one. If the nav lists parts, scroll through a multi-part section: the part highlight follows, the section link stays marked, and with `collapse-subs` only that section's parts are open.
 - If the doc has fill-in fields: type a value and watch every use of it update; press Copy on a block with a value missing and with a malformed one (it should jump to the field, not copy); switch each choice field and check the right blocks show; reload with remembering on (values stay) and off (they're gone); press Reset. Then fill some values and check the share buttons: Copy values gives the `Label: value` list; Download filled copy saves a file that opens with those values and only one set of Copy buttons per block; print preview (Save as PDF) shows the values, only the chosen variants and the values table, with no inputs, nav or buttons.
 - Check the browser console for errors.
