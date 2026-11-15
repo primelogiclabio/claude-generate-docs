@@ -86,7 +86,7 @@ Every doc gets a navigation menu linking to each major section. This is what "co
 
 - **Wide screens (≥ 1024px): a left pane, always open.** The page is a two-column grid: a sticky section list on the left, the doc on the right. Desktop readers have the width, so don't hide the sections behind a button — a collapsed floating button in a corner is the wrong default here.
 - **Narrow screens (< 1024px): the same list collapses** into a sticky bar at the top with a "Sections" button that drops the list down. It's one `<nav>` restyled by a media query, not two copies of the list.
-- **Highlight where the reader is** as they scroll: the section in view, and the part in view when the nav lists parts (below). Keep the highlighted link visible if the pane has to scroll.
+- **Highlight where the reader is** as they scroll: the section in view, and the part in view when the nav lists parts (below). After a click on a link, mark that link until the reader scrolls on their own, even when the section is too short or too near the end of the page to reach the top. Keep the highlighted link visible if the pane has to scroll.
 - **One nav only.** Don't also put a row of section links in the header; the pane replaces it.
 
 #### Subheadings in the nav
@@ -164,7 +164,8 @@ document.addEventListener('click', function (e) { if (!nav.contains(e.target)) s
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && nav.classList.contains('open')) { setOpen(false); navBtn.focus(); } });
 
 var links = Array.prototype.slice.call(nav.querySelectorAll('a'));
-var targets = links.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); });
+var ids = links.map(function (a) { return a.getAttribute('href').slice(1); });
+var targets = ids.map(function (id) { return document.getElementById(id); });
 function setActive(i) {
   var a = links[i];
   links.forEach(function (l) { l.setAttribute('aria-current', String(l === a)); });
@@ -176,19 +177,36 @@ function setActive(i) {
     nav.scrollTop = a.offsetTop - nav.clientHeight / 2;
   }
 }
-// active = the last section or part whose top has passed 30% of the viewport; the last one at the very bottom
 var current = -1, queued = false;
-function update() {
-  queued = false;
-  var line = window.innerHeight * 0.3, i = 0;
+function show(i) { if (i !== current) { current = i; setActive(i); } }
+// while scrolling: the last heading that has passed a line just below where a jumped-to heading lands
+function spy() {
+  var line = (parseFloat(getComputedStyle(targets[0]).scrollMarginTop) || 0) + 64, i = 0;
   while (i + 1 < targets.length && targets[i + 1].getBoundingClientRect().top <= line) i++;
   if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) i = targets.length - 1;
-  if (i !== current) { current = i; setActive(i); }
+  return i;
 }
-window.addEventListener('scroll', function () { if (!queued) { queued = true; requestAnimationFrame(update); } }, { passive: true });
-window.addEventListener('resize', update);
-update();
+// a clicked link stays marked until the reader scrolls on their own: a short section, or one near the
+// end of the page, can't be scrolled far enough for the rule above to pick it
+var pinned = false, settledY = null, settleTimer;
+function armSettle() { clearTimeout(settleTimer); settleTimer = setTimeout(function () { settledY = window.scrollY; }, 150); }
+function pin(id) { var i = ids.indexOf(id); if (i < 0) return; pinned = true; settledY = null; show(i); armSettle(); }
+document.addEventListener('click', function (e) { var a = e.target.closest('a[href^="#"]'); if (a) pin(a.getAttribute('href').slice(1)); });
+window.addEventListener('hashchange', function () { pin(decodeURIComponent(location.hash.slice(1))); });
+function update() { queued = false; show(spy()); }
+window.addEventListener('scroll', function () {
+  if (pinned) {
+    if (settledY === null) { armSettle(); return; }        // still moving to the clicked heading
+    if (Math.abs(window.scrollY - settledY) < 4) return;
+    pinned = false;                                         // the reader scrolled: back to the rule
+  }
+  if (!queued) { queued = true; requestAnimationFrame(update); }
+}, { passive: true });
+window.addEventListener('resize', function () { if (!pinned) update(); });
+if (location.hash && ids.indexOf(decodeURIComponent(location.hash.slice(1))) >= 0) pin(decodeURIComponent(location.hash.slice(1))); else update();
 ```
+
+Keep all three parts: the scroll rule alone marks the next section after a click on a short section or one near the end of the page. The line follows the headings' `scroll-margin-top`, so keep `main [id]{scroll-margin-top:…}` on the headings the nav links to.
 
 ### Guides and fill-in fields
 
@@ -220,7 +238,7 @@ A short background section before Prerequisites is fine when the reader needs co
 Before calling it done:
 - Open the file in a real browser (the built-in browser pane, or Claude in Chrome) — don't just eyeball the source.
 - Check both light and dark mode actually render correctly. With nothing saved, the page should match the system setting (emulate it with the pane's `colorScheme` option if available); the toggle should cycle System → Light → Dark, and a Light/Dark choice should survive a reload while System should not leave a saved key.
-- Check the nav at a wide width (the left pane is visible without clicking anything and stays put while the page scrolls) and at a narrow width (it becomes the top bar, the "Sections" button opens and closes the list, and a jumped-to heading isn't hidden under the bar). In both, links work and the current-section highlight updates on scroll. If the nav lists parts, scroll through a multi-part section: the part highlight follows, the section link stays marked, and with `collapse-subs` only that section's parts are open.
+- Check the nav at a wide width (the left pane is visible without clicking anything and stays put while the page scrolls) and at a narrow width (it becomes the top bar, the "Sections" button opens and closes the list, and a jumped-to heading isn't hidden under the bar). In both, links work and the current-section highlight updates on scroll; clicking a short section's link or the last one marks that link, not the next one. If the nav lists parts, scroll through a multi-part section: the part highlight follows, the section link stays marked, and with `collapse-subs` only that section's parts are open.
 - If the doc has fill-in fields: type a value and watch every use of it update; press Copy on a block with a value missing and with a malformed one (it should jump to the field, not copy); switch each choice field and check the right blocks show; reload with remembering on (values stay) and off (they're gone); press Reset. Then fill some values and check the share buttons: Copy values gives the `Label: value` list; Download filled copy saves a file that opens with those values and only one set of Copy buttons per block; print preview (Save as PDF) shows the values, only the chosen variants and the values table, with no inputs, nav or buttons.
 - Check the browser console for errors.
 - If the page has a CSS-grid diagram, check it at a narrow width too — grids that assume desktop width should degrade to a stacked layout rather than breaking.
